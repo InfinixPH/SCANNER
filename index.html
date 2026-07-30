@@ -33,6 +33,60 @@
     font-weight: 600;
     margin: 0 0 16px;
   }
+  .panel {
+    width: 100%;
+    max-width: 420px;
+  }
+  .field-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  .user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .user-btn {
+    padding: 12px 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+  }
+  .user-btn.active {
+    border-color: var(--accent);
+    background: rgba(79,140,255,0.15);
+    color: var(--accent);
+  }
+  select#modelSelect {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 18px;
+    appearance: none;
+  }
+  .current-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding: 0 2px;
+  }
+  .current-info b { color: var(--text); }
+
   #reader {
     width: 100%;
     max-width: 420px;
@@ -64,6 +118,7 @@
   .log-item {
     display: flex;
     justify-content: space-between;
+    gap: 8px;
     padding: 10px 12px;
     background: var(--card);
     border: 1px solid var(--border);
@@ -72,6 +127,7 @@
     font-size: 13px;
   }
   .log-item .imei { font-weight: 600; }
+  .log-item .model { color: var(--accent); }
   .log-item .time { color: var(--muted); }
   .log-item.dup { border-color: var(--error); }
 </style>
@@ -79,29 +135,122 @@
 <body>
 
 <h1>IMEI Barcode Scanner</h1>
+
+<div class="panel">
+  <p class="field-label">Select User</p>
+  <div class="user-grid" id="userGrid"></div>
+
+  <p class="field-label">Select Model</p>
+  <select id="modelSelect">
+    <option value="">-- Select phone model --</option>
+  </select>
+
+  <div class="current-info">
+    <span>User: <b id="currentUser">none</b></span>
+    <span>Model: <b id="currentModel">none</b></span>
+  </div>
+</div>
+
 <div id="reader"></div>
-<div id="status" class="status">Point camera at an IMEI barcode.</div>
+<div id="status" class="status">Select a user and model to start scanning.</div>
 <div id="log" class="log"></div>
 
 <script>
 // ===== CONFIG =====
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyd19tDjZPnDQ-pGapv6g76oK6fFYxM_5uugVEa-j-DMWsaFPRdWD7oKsnFNHV81rn/exec";
-const COOLDOWN_MS = 2500; // prevent double-fires of the same scan
+const COOLDOWN_MS = 1200; // pause after a scan before accepting the next one
+
+// Must match the USERS array in Code.gs
+const USERS = ["User 1", "User 2", "User 3", "User 4", "User 5"];
+
+const MODELS = [
+  "Note 50 Pro",
+  "Hot 60 Pro+",
+  "Hot 60 Pro",
+  "Hot 60i",
+  "Smart 10",
+  "GT 30 Pro",
+  "GT 30",
+  "XPAD 20 Pro",
+  "XPAD 20",
+  "XPAD GT",
+  "XPAD EDGE",
+  "NOTE EDGE",
+  "SMART 20",
+  "NOTE 60 PRO",
+  "NOTE 60 ULTRA",
+  "GT 50 PRO",
+  "Hot 70",
+  "XPAD 30E"
+];
 
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
+const userGridEl = document.getElementById("userGrid");
+const modelSelectEl = document.getElementById("modelSelect");
+const currentUserEl = document.getElementById("currentUser");
+const currentModelEl = document.getElementById("currentModel");
 
+let selectedUser = localStorage.getItem("imei_scanner_user") || null;
+let selectedModel = localStorage.getItem("imei_scanner_model") || null;
 let isPaused = false;
+let cameraStarted = false;
+
+// Build user buttons
+USERS.forEach(user => {
+  const btn = document.createElement("div");
+  btn.className = "user-btn" + (user === selectedUser ? " active" : "");
+  btn.textContent = user;
+  btn.onclick = () => {
+    selectedUser = user;
+    localStorage.setItem("imei_scanner_user", user);
+    document.querySelectorAll(".user-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentUserEl.textContent = user;
+    checkReady();
+  };
+  userGridEl.appendChild(btn);
+});
+
+// Build model dropdown
+MODELS.forEach(model => {
+  const opt = document.createElement("option");
+  opt.value = model;
+  opt.textContent = model;
+  if (model === selectedModel) opt.selected = true;
+  modelSelectEl.appendChild(opt);
+});
+modelSelectEl.onchange = () => {
+  selectedModel = modelSelectEl.value;
+  localStorage.setItem("imei_scanner_model", selectedModel);
+  currentModelEl.textContent = selectedModel || "none";
+  checkReady();
+};
+
+if (selectedUser) currentUserEl.textContent = selectedUser;
+if (selectedModel) currentModelEl.textContent = selectedModel;
+
+function checkReady() {
+  if (selectedUser && selectedModel) {
+    if (!cameraStarted) {
+      startCamera();
+    } else {
+      setStatus("Point camera at an IMEI barcode.");
+    }
+  } else {
+    setStatus("Select a user and model to start scanning.");
+  }
+}
 
 function setStatus(msg, type) {
   statusEl.textContent = msg;
   statusEl.className = "status" + (type ? " " + type : "");
 }
 
-function addLogItem(imei, timeText, isDup) {
+function addLogItem(imei, model, timeText, isDup) {
   const item = document.createElement("div");
   item.className = "log-item" + (isDup ? " dup" : "");
-  item.innerHTML = `<span class="imei">${imei}</span><span class="time">${timeText}</span>`;
+  item.innerHTML = `<span class="imei">${imei}</span><span class="model">${model}</span><span class="time">${timeText}</span>`;
   logEl.prepend(item);
 }
 
@@ -116,16 +265,16 @@ async function sendToSheet(imei) {
   try {
     const res = await fetch(SCRIPT_URL, {
       method: "POST",
-      body: new URLSearchParams({ imei })
+      body: new URLSearchParams({ imei, user: selectedUser, model: selectedModel })
     });
     const data = await res.json();
 
     if (data.success) {
-      setStatus(`Saved: ${imei}`, "success");
-      addLogItem(imei, new Date().toLocaleTimeString(), false);
+      setStatus(`Saved: ${imei} (${selectedModel}) → ${selectedUser}`, "success");
+      addLogItem(imei, selectedModel, new Date().toLocaleTimeString(), false);
     } else if (data.error === "Duplicate IMEI") {
       setStatus(`Already scanned: ${imei}`, "error");
-      addLogItem(imei, "duplicate", true);
+      addLogItem(imei, selectedModel, "duplicate", true);
     } else {
       setStatus(`Error: ${data.error}`, "error");
     }
@@ -137,6 +286,10 @@ async function sendToSheet(imei) {
 
 function onScanSuccess(decodedText) {
   if (isPaused) return;
+  if (!selectedUser || !selectedModel) {
+    setStatus("Select a user and model first.", "error");
+    return;
+  }
   isPaused = true;
   try { html5QrCode.pause(true); } catch (e) {}
   sendToSheet(decodedText.trim());
@@ -155,17 +308,24 @@ const html5QrCode = new Html5Qrcode("reader", {
   verbose: false
 });
 
-html5QrCode.start(
-  { facingMode: "environment" },
-  {
-    fps: 20,
-    qrbox: { width: 320, height: 110 },
-    aspectRatio: 1.7777778
-  },
-  onScanSuccess
-).catch(err => {
-  setStatus("Camera error: " + err, "error");
-});
+function startCamera() {
+  cameraStarted = true;
+  html5QrCode.start(
+    { facingMode: "environment" },
+    {
+      fps: 20,
+      qrbox: { width: 320, height: 110 },
+      aspectRatio: 1.7777778
+    },
+    onScanSuccess
+  ).then(() => {
+    setStatus("Point camera at an IMEI barcode.");
+  }).catch(err => {
+    setStatus("Camera error: " + err, "error");
+  });
+}
+
+checkReady();
 </script>
 
 </body>
