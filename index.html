@@ -374,7 +374,7 @@ function startCamera() {
   cameraStarted = true;
   html5QrCode.start(
     { facingMode: "environment" },
-    { fps: 20, qrbox: { width: 320, height: 110 }, aspectRatio: 1.7777778 },
+    { fps: 20 },
     onScanSuccess
   ).then(() => {
     setStatus("Point camera at an IMEI barcode.");
