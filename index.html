@@ -91,8 +91,7 @@ const COOLDOWN_MS = 2500; // prevent double-fires of the same scan
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
 
-let lastCode = null;
-let lastTime = 0;
+let isPaused = false;
 
 function setStatus(msg, type) {
   statusEl.textContent = msg;
@@ -104,6 +103,12 @@ function addLogItem(imei, timeText, isDup) {
   item.className = "log-item" + (isDup ? " dup" : "");
   item.innerHTML = `<span class="imei">${imei}</span><span class="time">${timeText}</span>`;
   logEl.prepend(item);
+}
+
+function resumeScanning() {
+  isPaused = false;
+  try { html5QrCode.resume(); } catch (e) {}
+  setStatus("Point camera at an IMEI barcode.");
 }
 
 async function sendToSheet(imei) {
@@ -127,28 +132,35 @@ async function sendToSheet(imei) {
   } catch (err) {
     setStatus(`Network error: ${err.message}`, "error");
   }
+  setTimeout(resumeScanning, COOLDOWN_MS);
 }
 
 function onScanSuccess(decodedText) {
-  const now = Date.now();
-  if (decodedText === lastCode && now - lastTime < COOLDOWN_MS) return;
-  lastCode = decodedText;
-  lastTime = now;
+  if (isPaused) return;
+  isPaused = true;
+  try { html5QrCode.pause(true); } catch (e) {}
   sendToSheet(decodedText.trim());
 }
 
-const html5QrCode = new Html5Qrcode("reader");
+const html5QrCode = new Html5Qrcode("reader", {
+  formatsToSupport: [
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.UPC_A
+  ],
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true
+  },
+  verbose: false
+});
+
 html5QrCode.start(
   { facingMode: "environment" },
   {
-    fps: 10,
-    qrbox: { width: 280, height: 120 },
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.UPC_A
-    ]
+    fps: 20,
+    qrbox: { width: 320, height: 110 },
+    aspectRatio: 1.7777778
   },
   onScanSuccess
 ).catch(err => {
