@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMEI Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #171a23;
+    --border: #262b38;
+    --text: #e8eaf0;
+    --muted: #8a90a3;
+    --accent: #4f8cff;
+    --success: #2fbf71;
+    --error: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 16px;
+  }
+  #reader {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .status {
+    max-width: 420px;
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 14px;
+    color: var(--muted);
+    min-height: 20px;
+  }
+  .status.success { color: var(--success); border-color: var(--success); }
+  .status.error { color: var(--error); border-color: var(--error); }
+  .status.pending { color: var(--accent); border-color: var(--accent); }
+
+  .log {
+    max-width: 420px;
+    width: 100%;
+    margin-top: 14px;
+  }
+  .log-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .log-item .imei { font-weight: 600; }
+  .log-item .time { color: var(--muted); }
+  .log-item.dup { border-color: var(--error); }
+</style>
+</head>
+<body>
+
+<h1>IMEI Barcode Scanner</h1>
+<div id="reader"></div>
+<div id="status" class="status">Point camera at an IMEI barcode.</div>
+<div id="log" class="log"></div>
+
+<script>
+// ===== CONFIG =====
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyd19tDjZPnDQ-pGapv6g76oK6fFYxM_5uugVEa-j-DMWsaFPRdWD7oKsnFNHV81rn/exec";
+const COOLDOWN_MS = 2500; // prevent double-fires of the same scan
+
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+
+let lastCode = null;
+let lastTime = 0;
+
+function setStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = "status" + (type ? " " + type : "");
+}
+
+function addLogItem(imei, timeText, isDup) {
+  const item = document.createElement("div");
+  item.className = "log-item" + (isDup ? " dup" : "");
+  item.innerHTML = `<span class="imei">${imei}</span><span class="time">${timeText}</span>`;
+  logEl.prepend(item);
+}
+
+async function sendToSheet(imei) {
+  setStatus(`Saving ${imei}...`, "pending");
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      body: new URLSearchParams({ imei })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      setStatus(`Saved: ${imei}`, "success");
+      addLogItem(imei, new Date().toLocaleTimeString(), false);
+    } else if (data.error === "Duplicate IMEI") {
+      setStatus(`Already scanned: ${imei}`, "error");
+      addLogItem(imei, "duplicate", true);
+    } else {
+      setStatus(`Error: ${data.error}`, "error");
+    }
+  } catch (err) {
+    setStatus(`Network error: ${err.message}`, "error");
+  }
+}
+
+function onScanSuccess(decodedText) {
+  const now = Date.now();
+  if (decodedText === lastCode && now - lastTime < COOLDOWN_MS) return;
+  lastCode = decodedText;
+  lastTime = now;
+  sendToSheet(decodedText.trim());
+}
+
+const html5QrCode = new Html5Qrcode("reader");
+html5QrCode.start(
+  { facingMode: "environment" },
+  {
+    fps: 10,
+    qrbox: { width: 280, height: 120 },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.UPC_A
+    ]
+  },
+  onScanSuccess
+).catch(err => {
+  setStatus("Camera error: " + err, "error");
+});
+</script>
+
+</body>
+</html>
