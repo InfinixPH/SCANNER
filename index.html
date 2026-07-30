@@ -2,217 +2,283 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>IMEI Scanner</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root {
-    --bg: #0f1117;
-    --card: #171a23;
-    --border: #262b38;
-    --text: #e8eaf0;
-    --muted: #8a90a3;
-    --accent: #4f8cff;
-    --success: #2fbf71;
-    --error: #ef4444;
+    --bg: #0a0c10;
+    --panel: #12151c;
+    --panel-2: #181c25;
+    --border: #232838;
+    --text: #eef1f6;
+    --muted: #6f7889;
+    --accent: #3ea6ff;
+    --accent-dim: rgba(62,166,255,0.14);
+    --success: #34d399;
+    --error: #f87171;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   }
-  * { box-sizing: border-box; }
-  body {
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
     margin: 0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  body {
+    font-family: var(--sans);
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    flex: 0 0 auto;
+    padding: 12px 14px calc(10px + env(safe-area-inset-top, 0px));
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .brand {
+    display: flex;
     align-items: center;
-    padding: 20px;
+    justify-content: space-between;
   }
-  h1 {
-    font-size: 20px;
-    font-weight: 600;
-    margin: 0 0 16px;
-  }
-  .panel {
-    width: 100%;
-    max-width: 420px;
-  }
-  .field-label {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-    margin: 0 0 8px;
-  }
-  .user-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  .user-btn {
-    padding: 12px 8px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
+  .brand h1 {
     font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: var(--text);
+  }
+  .brand .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .chip-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    padding: 7px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 12.5px;
     font-weight: 500;
     cursor: pointer;
-    text-align: center;
+    white-space: nowrap;
   }
-  .user-btn.active {
+  .chip.active {
     border-color: var(--accent);
-    background: rgba(79,140,255,0.15);
+    background: var(--accent-dim);
     color: var(--accent);
   }
+
   select#modelSelect {
     width: 100%;
-    padding: 12px 14px;
-    background: var(--card);
+    padding: 9px 12px;
+    background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     color: var(--text);
-    font-size: 14px;
-    margin-bottom: 18px;
-    appearance: none;
-  }
-  .current-info {
-    display: flex;
-    justify-content: space-between;
     font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 10px;
-    padding: 0 2px;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%236f7889' stroke-width='1.5' fill='none'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
   }
-  .current-info b { color: var(--text); }
+  select#modelSelect:invalid { color: var(--muted); }
 
+  /* ===== Camera viewfinder ===== */
+  .viewfinder {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: #000;
+    overflow: hidden;
+  }
   #reader {
     width: 100%;
-    max-width: 420px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border);
+    height: 100%;
   }
-  .status {
-    max-width: 420px;
-    width: 100%;
-    margin-top: 14px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    font-size: 14px;
-    color: var(--muted);
-    min-height: 20px;
+  #reader video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
   }
-  .status.success { color: var(--success); border-color: var(--success); }
-  .status.error { color: var(--error); border-color: var(--error); }
-  .status.pending { color: var(--accent); border-color: var(--accent); }
+  /* hide the library's default border/canvas chrome, we draw our own frame */
+  #reader img { display: none !important; }
 
+  .scan-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(82%, 360px);
+    aspect-ratio: 3 / 1;
+    pointer-events: none;
+  }
+  .scan-frame::before,
+  .scan-frame::after,
+  .scan-frame .c2,
+  .scan-frame .c3 {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--accent);
+  }
+  .scan-frame::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .scan-frame::after { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .scan-frame .c2 { bottom: 0; left: 0; border-right: none; border-top: none; }
+  .scan-frame .c3 { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+  .gate-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,12,16,0.88);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .gate-overlay.show { display: flex; }
+
+  /* ===== Status strip ===== */
+  .status {
+    flex: 0 0 auto;
+    padding: 12px 14px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex: 0 0 auto;
+  }
+  .status.success .dot { background: var(--success); }
+  .status.success { color: var(--success); }
+  .status.error .dot { background: var(--error); }
+  .status.error { color: var(--error); }
+  .status.pending .dot { background: var(--accent); animation: pulse 1s infinite; }
+  .status.pending { color: var(--accent); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ===== Log ===== */
   .log {
-    max-width: 420px;
-    width: 100%;
-    margin-top: 14px;
+    flex: 0 0 auto;
+    max-height: 30dvh;
+    overflow-y: auto;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
   }
   .log-item {
     display: flex;
+    align-items: baseline;
     justify-content: space-between;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 6px;
-    font-size: 13px;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
   }
-  .log-item .imei { font-weight: 600; }
-  .log-item .model { color: var(--accent); }
-  .log-item .time { color: var(--muted); }
-  .log-item.dup { border-color: var(--error); }
+  .log-item .imei { font-family: var(--mono); font-weight: 600; color: var(--text); }
+  .log-item .model { color: var(--accent); font-size: 11.5px; flex: 1; text-align: right; }
+  .log-item .time { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+  .log-item.dup .imei { color: var(--error); }
 </style>
 </head>
 <body>
 
-<h1>IMEI Barcode Scanner</h1>
-
-<div class="panel">
-  <p class="field-label">Select User</p>
-  <div class="user-grid" id="userGrid"></div>
-
-  <p class="field-label">Select Model</p>
-  <select id="modelSelect">
-    <option value="">-- Select phone model --</option>
-  </select>
-
-  <div class="current-info">
-    <span>User: <b id="currentUser">none</b></span>
-    <span>Model: <b id="currentModel">none</b></span>
+<div class="topbar">
+  <div class="brand">
+    <h1>IMEI Scanner</h1>
+    <span class="tag">Infinix Stock Intake</span>
   </div>
+  <div class="chip-row" id="userGrid"></div>
+  <select id="modelSelect">
+    <option value="">Select phone model...</option>
+  </select>
 </div>
 
-<div id="reader"></div>
-<div id="status" class="status">Select a user and model to start scanning.</div>
-<div id="log" class="log"></div>
+<div class="viewfinder">
+  <div id="reader"></div>
+  <div class="scan-frame"><span class="c2"></span><span class="c3"></span></div>
+  <div class="gate-overlay" id="gateOverlay">Select a user and model above<br>to start the camera.</div>
+</div>
+
+<div id="status" class="status"><span class="dot"></span><span id="statusText">Waiting for user + model selection.</span></div>
+<div class="log" id="log"></div>
 
 <script>
 // ===== CONFIG =====
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyyd19tDjZPnDQ-pGapv6g76oK6fFYxM_5uugVEa-j-DMWsaFPRdWD7oKsnFNHV81rn/exec";
-const COOLDOWN_MS = 1200; // pause after a scan before accepting the next one
+const COOLDOWN_MS = 1200;
 
 // Must match the USERS array in Code.gs
 const USERS = ["User 1", "User 2", "User 3", "User 4", "User 5"];
 
 const MODELS = [
-  "Note 50 Pro",
-  "Hot 60 Pro+",
-  "Hot 60 Pro",
-  "Hot 60i",
-  "Smart 10",
-  "GT 30 Pro",
-  "GT 30",
-  "XPAD 20 Pro",
-  "XPAD 20",
-  "XPAD GT",
-  "XPAD EDGE",
-  "NOTE EDGE",
-  "SMART 20",
-  "NOTE 60 PRO",
-  "NOTE 60 ULTRA",
-  "GT 50 PRO",
-  "Hot 70",
-  "XPAD 30E"
+  "Note 50 Pro","Hot 60 Pro+","Hot 60 Pro","Hot 60i","Smart 10",
+  "GT 30 Pro","GT 30","XPAD 20 Pro","XPAD 20","XPAD GT","XPAD EDGE",
+  "NOTE EDGE","SMART 20","NOTE 60 PRO","NOTE 60 ULTRA","GT 50 PRO",
+  "Hot 70","XPAD 30E"
 ];
 
 const statusEl = document.getElementById("status");
+const statusTextEl = document.getElementById("statusText");
 const logEl = document.getElementById("log");
 const userGridEl = document.getElementById("userGrid");
 const modelSelectEl = document.getElementById("modelSelect");
-const currentUserEl = document.getElementById("currentUser");
-const currentModelEl = document.getElementById("currentModel");
+const gateOverlayEl = document.getElementById("gateOverlay");
 
 let selectedUser = localStorage.getItem("imei_scanner_user") || null;
 let selectedModel = localStorage.getItem("imei_scanner_model") || null;
 let isPaused = false;
 let cameraStarted = false;
 
-// Build user buttons
 USERS.forEach(user => {
-  const btn = document.createElement("div");
-  btn.className = "user-btn" + (user === selectedUser ? " active" : "");
-  btn.textContent = user;
-  btn.onclick = () => {
+  const chip = document.createElement("div");
+  chip.className = "chip" + (user === selectedUser ? " active" : "");
+  chip.textContent = user;
+  chip.onclick = () => {
     selectedUser = user;
     localStorage.setItem("imei_scanner_user", user);
-    document.querySelectorAll(".user-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentUserEl.textContent = user;
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
     checkReady();
   };
-  userGridEl.appendChild(btn);
+  userGridEl.appendChild(chip);
 });
 
-// Build model dropdown
 MODELS.forEach(model => {
   const opt = document.createElement("option");
   opt.value = model;
@@ -223,27 +289,25 @@ MODELS.forEach(model => {
 modelSelectEl.onchange = () => {
   selectedModel = modelSelectEl.value;
   localStorage.setItem("imei_scanner_model", selectedModel);
-  currentModelEl.textContent = selectedModel || "none";
   checkReady();
 };
 
-if (selectedUser) currentUserEl.textContent = selectedUser;
-if (selectedModel) currentModelEl.textContent = selectedModel;
-
 function checkReady() {
   if (selectedUser && selectedModel) {
+    gateOverlayEl.classList.remove("show");
     if (!cameraStarted) {
       startCamera();
     } else {
       setStatus("Point camera at an IMEI barcode.");
     }
   } else {
-    setStatus("Select a user and model to start scanning.");
+    gateOverlayEl.classList.add("show");
+    setStatus("Waiting for user + model selection.");
   }
 }
 
 function setStatus(msg, type) {
-  statusEl.textContent = msg;
+  statusTextEl.textContent = msg;
   statusEl.className = "status" + (type ? " " + type : "");
 }
 
@@ -270,10 +334,10 @@ async function sendToSheet(imei) {
     const data = await res.json();
 
     if (data.success) {
-      setStatus(`Saved: ${imei} (${selectedModel}) → ${selectedUser}`, "success");
+      setStatus(`Saved ${imei} → ${selectedUser}`, "success");
       addLogItem(imei, selectedModel, new Date().toLocaleTimeString(), false);
     } else if (data.error === "Duplicate IMEI") {
-      setStatus(`Already scanned: ${imei}`, "error");
+      setStatus(`Duplicate: ${imei}`, "error");
       addLogItem(imei, selectedModel, "duplicate", true);
     } else {
       setStatus(`Error: ${data.error}`, "error");
@@ -302,9 +366,7 @@ const html5QrCode = new Html5Qrcode("reader", {
     Html5QrcodeSupportedFormats.EAN_13,
     Html5QrcodeSupportedFormats.UPC_A
   ],
-  experimentalFeatures: {
-    useBarCodeDetectorIfSupported: true
-  },
+  experimentalFeatures: { useBarCodeDetectorIfSupported: true },
   verbose: false
 });
 
@@ -312,11 +374,7 @@ function startCamera() {
   cameraStarted = true;
   html5QrCode.start(
     { facingMode: "environment" },
-    {
-      fps: 20,
-      qrbox: { width: 320, height: 110 },
-      aspectRatio: 1.7777778
-    },
+    { fps: 20, qrbox: { width: 320, height: 110 }, aspectRatio: 1.7777778 },
     onScanSuccess
   ).then(() => {
     setStatus("Point camera at an IMEI barcode.");
